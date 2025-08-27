@@ -354,4 +354,49 @@ class TestCodePreverifier : FreeSpec({
             programClassPool.toString()
         }
     }
+
+
+    /**
+     *
+     *  com.google.android.gms.internal.ads.zzaqz(java.net.HttpURLConnection);
+     *     descriptor: (Ljava/net/HttpURLConnection;)V
+     *     flags: (0x0000)
+     *     Code:
+     *       stack=2, locals=3, args_size=2
+     *          0: aload_1
+     *          1: invokevirtual #11                 // Method java/net/HttpURLConnection.getInputStream:()Ljava/io/InputStream;
+     *          4: astore_2
+     *          5: aload_0
+     *          6: aload_2
+     *          7: invokespecial #7                  // Method java/io/FilterInputStream."<init>":(Ljava/io/InputStream;)V
+     *         10: aload_0
+     *         11: aload_1
+     *         12: putfield      #6                  // Field zza:Ljava/net/HttpURLConnection;
+     *         15: return
+     *         16: pop
+     *         17: aload_1
+     *         18: invokevirtual #10                 // Method java/net/HttpURLConnection.getErrorStream:()Ljava/io/InputStream;
+     *         21: astore_2
+     *         22: goto          5
+     *       Exception table:
+     *          from    to  target type
+     *              0     5    16   Class java/io/IOException
+     *       LineNumberTable:
+     *         line 1: 0
+     *         line 3: 7
+     *         line 2: 16
+     *       StackMapTable: number_of_entries = 2
+     *         frame_type = 252 /* append */
+     *           offset_delta = 5
+     *           locals = [ class java/io/InputStream ]
+     *         frame_type = 255 /* full_frame */
+     *           offset_delta = 10
+     *           locals = [ class com/google/android/gms/internal/ads/zzaqz, class java/net/HttpURLConnection ]
+     *           stack = [ class java/io/IOException ]
+     *
+     */
+
+
+
+
 })
