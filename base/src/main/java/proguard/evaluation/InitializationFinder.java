@@ -186,9 +186,9 @@ public class InitializationFinder implements AttributeVisitor, InstructionVisito
       if (partialEvaluator.isTraced(offset)) {
         // Exception handlers start without uninitialized instances
         // (on the stack or in variables).
-        if (partialEvaluator.isExceptionHandler(offset)) {
-          currentUninitializedOffsets = InstructionOffsetValue.EMPTY_VALUE;
-        }
+//        if (partialEvaluator.isExceptionHandler(offset)) {
+//          currentUninitializedOffsets = InstructionOffsetValue.EMPTY_VALUE;
+//        }
 
         // Check if the uninitialized creation offsets have been set
         // before (because of a forward branch).
