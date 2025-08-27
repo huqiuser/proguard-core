@@ -578,6 +578,6 @@ public class CodePreverifier implements AttributeVisitor {
   private boolean isUninitalizedThis(int offset, int variableIndex) {
     return variableIndex == 0
         && initializationFinder.isInitializer()
-        && offset <= initializationFinder.superInitializationOffset();
+        && !initializationFinder.isInitializedBefore(offset, new InstructionOffsetValue(InstructionOffsetValue.METHOD_PARAMETER));
   }
 }

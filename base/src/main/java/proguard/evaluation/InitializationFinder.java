@@ -237,8 +237,6 @@ public class InitializationFinder implements AttributeVisitor, InstructionVisito
               uninitializedOffsets[branchOffset] = currentUninitializedOffsets;
             }
           }
-
-          currentUninitializedOffsets = InstructionOffsetValue.EMPTY_VALUE;
         }
       }
     }

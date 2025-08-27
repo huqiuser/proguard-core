@@ -11,11 +11,15 @@ import io.kotest.core.spec.style.FreeSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.spyk
 import io.mockk.verify
+import proguard.classfile.AccessConstants
+import proguard.classfile.ClassConstants
+import proguard.classfile.ClassPool
 import proguard.classfile.Clazz
 import proguard.classfile.Member
 import proguard.classfile.Method
 import proguard.classfile.ProgramClass
 import proguard.classfile.ProgramMember
+import proguard.classfile.VersionConstants
 import proguard.classfile.attribute.Attribute
 import proguard.classfile.attribute.CodeAttribute
 import proguard.classfile.attribute.preverification.MoreZeroFrame
@@ -26,11 +30,15 @@ import proguard.classfile.attribute.preverification.visitor.StackMapFrameVisitor
 import proguard.classfile.attribute.preverification.visitor.VerificationTypeVisitor
 import proguard.classfile.attribute.visitor.AllAttributeVisitor
 import proguard.classfile.attribute.visitor.AttributeVisitor
+import proguard.classfile.editor.ClassBuilder
+import proguard.classfile.io.ProgramClassWriter
 import proguard.classfile.visitor.AllMethodVisitor
 import proguard.classfile.visitor.MemberVisitor
 import proguard.preverify.CodePreverifier
 import proguard.testutils.ClassPoolBuilder
 import proguard.testutils.JavaSource
+import java.io.DataOutputStream
+import java.io.FileOutputStream
 
 class TestCodePreverifier : FreeSpec({
 
@@ -271,6 +279,79 @@ class TestCodePreverifier : FreeSpec({
                     },
                 )
             }
+        }
+    }
+
+    "Given a stackmap entry with a backwards branch" - {
+        // Start building the class.
+        val  programClass=  ClassBuilder(
+            VersionConstants.CLASS_VERSION_1_8,
+            AccessConstants.PUBLIC,
+            "Test",
+            ClassConstants.NAME_JAVA_LANG_OBJECT
+        ) // Add the main method.
+            .addMethod(
+                AccessConstants.PUBLIC or AccessConstants.STATIC,
+                "main",
+                "([Ljava/lang/String;)V",
+                50,  // Compose the equivalent of this java code:
+                //     System.out.println("Hello, world!");
+
+                ClassBuilder.CodeBuilder { code ->
+                    code.getstatic("java/lang/System", "out", "Ljava/io/PrintStream;")
+                        .ldc("Hello")
+                        .invokevirtual("java/io/PrintStream", "println", "(Ljava/lang/String;)V")
+                        .return_()
+                }) // We don't need to preverify simple code that doesn't have
+            // special control flow. It works fine without a stack map
+            // table attribute.
+            // Retrieve the final class.
+
+            .addMethod(
+                AccessConstants.PUBLIC,
+                ClassConstants.METHOD_NAME_INIT,
+                ClassConstants.METHOD_TYPE_INIT,
+                50,
+
+                { code ->
+                    val lable1 = code.createLabel()
+                    val lable2 = code.createLabel()
+
+                    code.goto_(lable1)
+                        .label(lable2)
+                        .aload_0()
+                        .invokespecial(ClassConstants.NAME_JAVA_LANG_OBJECT, ClassConstants.METHOD_NAME_INIT, ClassConstants.METHOD_TYPE_INIT)
+                        .return_()
+                        .label(lable1)
+                        .goto_(lable2)
+                }
+            )
+            .programClass;
+//        if(true){
+//            val dataOutputStream = DataOutputStream(FileOutputStream("/home/xc/Downloads/ReportAttachements/PG-keep/Test/Test.class"))
+//            programClass.accept(ProgramClassWriter(dataOutputStream))
+//            dataOutputStream.close()
+//        }
+
+        programClass.accept(
+            AllMethodVisitor(
+                AllAttributeVisitor(
+                    CodePreverifier(false),
+                ),
+            ),
+        )
+
+//        if(true)
+//        {
+//            val dataOutputStream = DataOutputStream(FileOutputStream("/home/xc/Downloads/ReportAttachements/PG-keep/Test/Test1/Test.class"))
+//            programClass.accept(ProgramClassWriter(dataOutputStream))
+//            dataOutputStream.close()
+//        }
+
+        val programClassPool = ClassPool(programClass)
+
+        "Then the local variable should be correct" {
+            programClassPool.toString()
         }
     }
 })
