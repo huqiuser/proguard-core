@@ -455,6 +455,11 @@ public class PartialEvaluator implements AttributeVisitor, ExceptionInfoVisitor 
     return branchTargetFinder.isExceptionHandler(instructionOffset);
   }
 
+  /** Returns whether the instruction at the given offset is the end of an exception try block. */
+  public boolean isExceptionEnd(int instructionOffset) {
+        return branchTargetFinder.isExceptionEnd(instructionOffset);
+  }
+
   /** Returns whether the instruction at the given offset is the start of a subroutine. */
   public boolean isSubroutineStart(int instructionOffset) {
     return branchTargetFinder.isSubroutineStart(instructionOffset);

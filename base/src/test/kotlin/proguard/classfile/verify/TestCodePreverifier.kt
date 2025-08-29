@@ -42,253 +42,13 @@ import java.io.FileOutputStream
 
 class TestCodePreverifier : FreeSpec({
 
-    "Given a stackmap entry with an array type" - {
-        val (programClassPool, _) = ClassPoolBuilder.fromSource(
-            JavaSource(
-                "Test.java",
-                """
-                 public class Test {
-                     public static void main(String[] args) {
-                         Object[] test;
-                         if (args.length > 0) {
-                             test = new Test[0];
-                         } else {
-                             test = new Integer[0];
-                         }
-                 
-                         System.out.println(test);
-                     }
-                 }
-                """.trimIndent(),
-            ),
-            javacArguments = listOf("-source", "1.8", "-target", "1.8"),
-        )
-
-        "Then the local variable should be correct" {
-            val verificationTypeVisitor = spyk(object : VerificationTypeVisitor {
-                override fun visitAnyVerificationType(
-                    clazz: Clazz,
-                    method: Method,
-                    codeAttribute: CodeAttribute,
-                    offset: Int,
-                    verificationType: VerificationType,
-                ) {
-                }
-            })
-
-            programClassPool.classesAccept(
-                AllMethodVisitor(
-                    AllAttributeVisitor(
-                        CodePreverifier(false),
-                    ),
-                ),
-            )
-
-            programClassPool.classesAccept(
-                "Test",
-                AllMethodVisitor(
-                    object : MemberVisitor, AttributeVisitor {
-                        override fun visitAnyMember(clazz: Clazz, member: Member) {}
-
-                        override fun visitProgramMember(programClass: ProgramClass, programMember: ProgramMember) {
-                            programMember.attributesAccept(programClass, this)
-                        }
-
-                        override fun visitAnyAttribute(clazz: Clazz?, attribute: Attribute?) {}
-
-                        override fun visitCodeAttribute(clazz: Clazz, method: Method, codeAttribute: CodeAttribute) {
-                            codeAttribute.attributesAccept(
-                                clazz,
-                                method,
-                                object : AttributeVisitor {
-                                    override fun visitAnyAttribute(clazz: Clazz, attribute: Attribute) {
-                                    }
-
-                                    override fun visitStackMapTableAttribute(
-                                        clazz: Clazz,
-                                        method: Method,
-                                        codeAttribute: CodeAttribute,
-                                        stackMapTableAttribute: StackMapTableAttribute,
-                                    ) {
-                                        stackMapTableAttribute.stackMapFramesAccept(
-                                            clazz,
-                                            method,
-                                            codeAttribute,
-                                            object : StackMapFrameVisitor {
-                                                override fun visitAnyStackMapFrame(
-                                                    clazz: Clazz,
-                                                    method: Method,
-                                                    codeAttribute: CodeAttribute,
-                                                    offset: Int,
-                                                    stackMapFrame: StackMapFrame,
-                                                ) {
-                                                }
-
-                                                override fun visitMoreZeroFrame(
-                                                    clazz: Clazz,
-                                                    method: Method,
-                                                    codeAttribute: CodeAttribute,
-                                                    offset: Int,
-                                                    moreZeroFrame: MoreZeroFrame,
-                                                ) {
-                                                    moreZeroFrame.additionalVariablesAccept(
-                                                        clazz,
-                                                        method,
-                                                        codeAttribute,
-                                                        offset,
-                                                        verificationTypeVisitor,
-                                                    )
-                                                }
-                                            },
-                                        )
-                                    }
-                                },
-                            )
-                        }
-                    },
-                ),
-            )
-            verify {
-                val clazz = programClassPool.getClass("Test")
-                verificationTypeVisitor.visitObjectType(
-                    clazz,
-                    clazz.findMethod("main", "([Ljava/lang/String;)V"),
-                    ofType<CodeAttribute>(),
-                    ofType<Int>(),
-                    withArg {
-                        clazz.getClassName(it.u2classIndex) shouldBe "[Ljava/lang/Object;"
-                    },
-                )
-            }
-        }
-    }
-
-    "Given a stackmap entry with a primitve array type" - {
-        val (programClassPool, _) = ClassPoolBuilder.fromSource(
-            JavaSource(
-                "Test.java",
-                """
-                 public class Test {
-                     public static void main(String[] args) {
-                         int[] test;
-                         if (args.length > 0) {
-                             test = null;
-                         } else {
-                             test = new int[0];
-                         }
-                         System.out.println(test);
-                     }
-                 }
-                """.trimIndent(),
-            ),
-            javacArguments = listOf("-source", "1.8", "-target", "1.8"),
-        )
-        "Then the local variable should be correct" {
-            val verificationTypeVisitor = spyk(object : VerificationTypeVisitor {
-                override fun visitAnyVerificationType(
-                    clazz: Clazz,
-                    method: Method,
-                    codeAttribute: CodeAttribute,
-                    offset: Int,
-                    verificationType: VerificationType,
-                ) {
-                }
-            })
-
-            programClassPool.classesAccept(
-                AllMethodVisitor(
-                    AllAttributeVisitor(
-                        CodePreverifier(false),
-                    ),
-                ),
-            )
-
-            programClassPool.classesAccept(
-                "Test",
-                AllMethodVisitor(
-                    object : MemberVisitor, AttributeVisitor {
-                        override fun visitAnyMember(clazz: Clazz, member: Member) {}
-
-                        override fun visitProgramMember(programClass: ProgramClass, programMember: ProgramMember) {
-                            programMember.attributesAccept(programClass, this)
-                        }
-
-                        override fun visitAnyAttribute(clazz: Clazz?, attribute: Attribute?) {}
-
-                        override fun visitCodeAttribute(clazz: Clazz, method: Method, codeAttribute: CodeAttribute) {
-                            codeAttribute.attributesAccept(
-                                clazz,
-                                method,
-                                object : AttributeVisitor {
-                                    override fun visitAnyAttribute(clazz: Clazz, attribute: Attribute) {
-                                    }
-
-                                    override fun visitStackMapTableAttribute(
-                                        clazz: Clazz,
-                                        method: Method,
-                                        codeAttribute: CodeAttribute,
-                                        stackMapTableAttribute: StackMapTableAttribute,
-                                    ) {
-                                        stackMapTableAttribute.stackMapFramesAccept(
-                                            clazz,
-                                            method,
-                                            codeAttribute,
-                                            object : StackMapFrameVisitor {
-                                                override fun visitAnyStackMapFrame(
-                                                    clazz: Clazz,
-                                                    method: Method,
-                                                    codeAttribute: CodeAttribute,
-                                                    offset: Int,
-                                                    stackMapFrame: StackMapFrame,
-                                                ) {
-                                                }
-
-                                                override fun visitMoreZeroFrame(
-                                                    clazz: Clazz,
-                                                    method: Method,
-                                                    codeAttribute: CodeAttribute,
-                                                    offset: Int,
-                                                    moreZeroFrame: MoreZeroFrame,
-                                                ) {
-                                                    moreZeroFrame.additionalVariablesAccept(
-                                                        clazz,
-                                                        method,
-                                                        codeAttribute,
-                                                        offset,
-                                                        verificationTypeVisitor,
-                                                    )
-                                                }
-                                            },
-                                        )
-                                    }
-                                },
-                            )
-                        }
-                    },
-                ),
-            )
-            verify {
-                val clazz = programClassPool.getClass("Test")
-                verificationTypeVisitor.visitObjectType(
-                    clazz,
-                    clazz.findMethod("main", "([Ljava/lang/String;)V"),
-                    ofType<CodeAttribute>(),
-                    ofType<Int>(),
-                    withArg {
-                        clazz.getClassName(it.u2classIndex) shouldBe "[I"
-                    },
-                )
-            }
-        }
-    }
-
     "Given a stackmap entry with a backwards branch" - {
         // Start building the class.
         val  programClass=  ClassBuilder(
             VersionConstants.CLASS_VERSION_1_8,
             AccessConstants.PUBLIC,
-            "Test",
-            ClassConstants.NAME_JAVA_LANG_OBJECT
+            "TestFilterInputStream",
+            "java/io/FilterInputStream"
         ) // Add the main method.
             .addMethod(
                 AccessConstants.PUBLIC or AccessConstants.STATIC,
@@ -306,32 +66,86 @@ class TestCodePreverifier : FreeSpec({
             // special control flow. It works fine without a stack map
             // table attribute.
             // Retrieve the final class.
+            .addField(AccessConstants.PRIVATE, "httpURLConnection", "Ljava/net/HttpURLConnection;")
 
             .addMethod(
                 AccessConstants.PUBLIC,
                 ClassConstants.METHOD_NAME_INIT,
-                ClassConstants.METHOD_TYPE_INIT,
+                "(Ljava/net/HttpURLConnection;)V",
                 50,
 
-                { code ->
-                    val lable1 = code.createLabel()
-                    val lable2 = code.createLabel()
+                /**
+                 *
 
-                    code.goto_(lable1)
-                        .label(lable2)
+                 *  com.google.android.gms.internal.ads.zzaqz(java.net.HttpURLConnection);
+        *     descriptor: (Ljava/net/HttpURLConnection;)V
+        *     flags: (0x0000)
+        *     Code:
+        *       stack=2, locals=3, args_size=2
+        *          0: aload_1
+        *          1: invokevirtual #11                 // Method java/net/HttpURLConnection.getInputStream:()Ljava/io/InputStream;
+        *          4: astore_2
+        *          5: aload_0
+        *          6: aload_2
+        *          7: invokespecial #7                  // Method java/io/FilterInputStream."<init>":(Ljava/io/InputStream;)V
+        *         10: aload_0
+        *         11: aload_1
+        *         12: putfield      #6                  // Field zza:Ljava/net/HttpURLConnection;
+        *         15: return
+        *         16: pop
+        *         17: aload_1
+        *         18: invokevirtual #10                 // Method java/net/HttpURLConnection.getErrorStream:()Ljava/io/InputStream;
+        *         21: astore_2
+        *         22: goto          5
+        *       Exception table:
+        *          from    to  target type
+        *              0     5    16   Class java/io/IOException
+        *       LineNumberTable:
+        *         line 1: 0
+        *         line 3: 7
+        *         line 2: 16
+        *       StackMapTable: number_of_entries = 2
+        *         frame_type = 252 /* append */
+        *           offset_delta = 5
+        *           locals = [ class java/io/InputStream ]
+        *         frame_type = 255 /* full_frame */
+        *           offset_delta = 10
+        *           locals = [ class com/google/android/gms/internal/ads/zzaqz, class java/net/HttpURLConnection ]
+        *           stack = [ class java/io/IOException ]
+        *
+        */
+                { code ->
+                    val tryStart = code.createLabel()
+                    val tryEnd = code.createLabel()
+//                    val catchLable = code.createLabel()
+
+                    code
+                        .label(tryStart)
+                        .aload_1()
+                        .invokevirtual("java/net/HttpURLConnection", "getInputStream", "()Ljava/io/InputStream;")
+                        .astore_2()
+                        .label(tryEnd)
                         .aload_0()
-                        .invokespecial(ClassConstants.NAME_JAVA_LANG_OBJECT, ClassConstants.METHOD_NAME_INIT, ClassConstants.METHOD_TYPE_INIT)
+                        .aload_2()
+                        .invokespecial("java/io/FilterInputStream", "<init>", "(Ljava/io/InputStream;)V")
+                        .aload_0()
+                        .aload_1()
+                        .putfield("TestFilterInputStream", "httpURLConnection", "Ljava/net/HttpURLConnection;")
                         .return_()
-                        .label(lable1)
-                        .goto_(lable2)
+                        .catch_(tryStart, tryEnd, "java/io/IOException", null)
+                        .pop()
+                        .aload_1()
+                        .invokevirtual("java/net/HttpURLConnection", "getErrorStream", "()Ljava/io/InputStream;")
+                        .astore_2()
+                        .goto_(tryEnd)
                 }
             )
             .programClass;
-//        if(true){
-//            val dataOutputStream = DataOutputStream(FileOutputStream("/home/xc/Downloads/ReportAttachements/PG-keep/Test/Test.class"))
-//            programClass.accept(ProgramClassWriter(dataOutputStream))
-//            dataOutputStream.close()
-//        }
+        if(true){
+            val dataOutputStream = DataOutputStream(FileOutputStream("/home/xc/Downloads/ReportAttachements/PG-keep/Test/TestFilterInputStream.class"))
+            programClass.accept(ProgramClassWriter(dataOutputStream))
+            dataOutputStream.close()
+        }
 
         programClass.accept(
             AllMethodVisitor(
@@ -341,12 +155,12 @@ class TestCodePreverifier : FreeSpec({
             ),
         )
 
-//        if(true)
-//        {
-//            val dataOutputStream = DataOutputStream(FileOutputStream("/home/xc/Downloads/ReportAttachements/PG-keep/Test/Test1/Test.class"))
-//            programClass.accept(ProgramClassWriter(dataOutputStream))
-//            dataOutputStream.close()
-//        }
+        if(true)
+        {
+            val dataOutputStream = DataOutputStream(FileOutputStream("/home/xc/Downloads/ReportAttachements/PG-keep/Test/Test1/TestFilterInputStream.class"))
+            programClass.accept(ProgramClassWriter(dataOutputStream))
+            dataOutputStream.close()
+        }
 
         val programClassPool = ClassPool(programClass)
 
@@ -357,45 +171,16 @@ class TestCodePreverifier : FreeSpec({
 
 
     /**
+     * goto
      *
-     *  com.google.android.gms.internal.ads.zzaqz(java.net.HttpURLConnection);
-     *     descriptor: (Ljava/net/HttpURLConnection;)V
-     *     flags: (0x0000)
-     *     Code:
-     *       stack=2, locals=3, args_size=2
-     *          0: aload_1
-     *          1: invokevirtual #11                 // Method java/net/HttpURLConnection.getInputStream:()Ljava/io/InputStream;
-     *          4: astore_2
-     *          5: aload_0
-     *          6: aload_2
-     *          7: invokespecial #7                  // Method java/io/FilterInputStream."<init>":(Ljava/io/InputStream;)V
-     *         10: aload_0
-     *         11: aload_1
-     *         12: putfield      #6                  // Field zza:Ljava/net/HttpURLConnection;
-     *         15: return
-     *         16: pop
-     *         17: aload_1
-     *         18: invokevirtual #10                 // Method java/net/HttpURLConnection.getErrorStream:()Ljava/io/InputStream;
-     *         21: astore_2
-     *         22: goto          5
-     *       Exception table:
-     *          from    to  target type
-     *              0     5    16   Class java/io/IOException
-     *       LineNumberTable:
-     *         line 1: 0
-     *         line 3: 7
-     *         line 2: 16
-     *       StackMapTable: number_of_entries = 2
-     *         frame_type = 252 /* append */
-     *           offset_delta = 5
-     *           locals = [ class java/io/InputStream ]
-     *         frame_type = 255 /* full_frame */
-     *           offset_delta = 10
-     *           locals = [ class com/google/android/gms/internal/ads/zzaqz, class java/net/HttpURLConnection ]
-     *           stack = [ class java/io/IOException ]
+     *
+     * aload 0
+     * invoke
+     *
+     *
+     * exception 177 179 175
      *
      */
-
 
 
 

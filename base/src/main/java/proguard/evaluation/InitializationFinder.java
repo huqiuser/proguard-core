@@ -17,9 +17,15 @@
  */
 package proguard.evaluation;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+
 import proguard.classfile.*;
 import proguard.classfile.attribute.*;
 import proguard.classfile.attribute.visitor.AttributeVisitor;
+import proguard.classfile.attribute.visitor.ExceptionInfoVisitor;
 import proguard.classfile.editor.ClassEstimates;
 import proguard.classfile.instruction.InstructionFactory;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
@@ -32,7 +38,7 @@ import proguard.util.ArrayUtil;
  *
  * @author Eric Lafortune
  */
-public class InitializationFinder implements AttributeVisitor, InstructionVisitor {
+public class InitializationFinder implements AttributeVisitor, InstructionVisitor, ExceptionInfoVisitor {
   // *
   private static final boolean DEBUG = false;
   /*/
@@ -173,6 +179,9 @@ public class InitializationFinder implements AttributeVisitor, InstructionVisito
       partialEvaluator.visitCodeAttribute(clazz, method, codeAttribute);
     }
 
+    exceptionBranchTarget.clear();
+    codeAttribute.exceptionsAccept(clazz, method, this);
+
     // Loop over all instructions. This is sufficient, because the JVM
     // specifications don't allow uninitialized instances on the stack or
     // in variables when branching backward. JVMs without preverification
@@ -182,62 +191,116 @@ public class InitializationFinder implements AttributeVisitor, InstructionVisito
             ? new InstructionOffsetValue(InstructionOffsetValue.METHOD_PARAMETER)
             : InstructionOffsetValue.EMPTY_VALUE;
 
-    for (int offset = 0; offset < codeLength; offset++) {
-      if (partialEvaluator.isTraced(offset)) {
-        // Exception handlers start without uninitialized instances
-        // (on the stack or in variables).
-//        if (partialEvaluator.isExceptionHandler(offset)) {
-//          currentUninitializedOffsets = InstructionOffsetValue.EMPTY_VALUE;
-//        }
+    for(int tryIndex = 0; tryIndex < 10; tryIndex++) {
 
-        // Check if the uninitialized creation offsets have been set
-        // before (because of a forward branch).
-        if (uninitializedOffsets[offset] != null) {
-          // Continue using them.
-          currentUninitializedOffsets = uninitializedOffsets[offset];
-        } else {
-          uninitializedOffsets[offset] = currentUninitializedOffsets;
-        }
 
-        // Is it a 'new' instruction?
-        if (partialEvaluator.isCreation(offset)) {
-          // Add its offset to the current list.
-          currentUninitializedOffsets = currentUninitializedOffsets.add(offset);
-        }
-        // Is it an instance initialization?
-        else if (partialEvaluator.isInitializer(offset)) {
-          // Remove its creation offset from the current list.
-          InstructionOffsetValue creationOffsetValue = creationOffsetValue(offset);
+      for (int offset = 0; offset < codeLength; offset++) {
+        if (partialEvaluator.isTraced(offset)) {
+          // Exception handlers start without uninitialized instances
+          // (on the stack or in variables).
+          if (partialEvaluator.isExceptionHandler(offset)) {
+            for (; offset < codeLength; offset++) {
+              if (partialEvaluator.isTraced(offset)) {
+                if (uninitializedOffsets[offset] != null) {
+                  break;
+                }
+              }
+            }
 
-          int creationOffset = creationOffsetValue.instructionOffset(0);
-
-          if (creationOffsetValue.isMethodParameter(0)) {
-            // Remember the super initialization offset of the
-            // initializer method.
-            superInitializationOffset = offset;
-          } else {
-            // Remember the instance initialization for the 'new'
-            // instruction.
-            initializationOffsets[creationOffset] = offset;
+            if (offset >= codeLength) {
+              throw new RuntimeException("why ");
+            }
           }
 
-          currentUninitializedOffsets = currentUninitializedOffsets.remove(creationOffset);
+          // Check if the uninitialized creation offsets have been set
+          // before (because of a forward branch).
+          if (uninitializedOffsets[offset] != null) {
+            // Continue using them.
+            currentUninitializedOffsets = uninitializedOffsets[offset];
+          } else {
+            uninitializedOffsets[offset] = currentUninitializedOffsets;
+          }
+
+          // Is it a 'new' instruction?
+          if (partialEvaluator.isCreation(offset)) {
+            // Add its offset to the current list.
+            currentUninitializedOffsets = currentUninitializedOffsets.add(offset);
+          }
+          // Is it an instance initialization?
+          else if (partialEvaluator.isInitializer(offset)) {
+            // Remove its creation offset from the current list.
+            InstructionOffsetValue creationOffsetValue = creationOffsetValue(offset);
+
+            int creationOffset = creationOffsetValue.instructionOffset(0);
+
+            if (creationOffsetValue.isMethodParameter(0)) {
+              // Remember the super initialization offset of the
+              // initializer method.
+              superInitializationOffset = offset;
+            } else {
+              // Remember the instance initialization for the 'new'
+              // instruction.
+              initializationOffsets[creationOffset] = offset;
+            }
+
+            currentUninitializedOffsets = currentUninitializedOffsets.remove(creationOffset);
+          }
+
+          // Propagate the uninitialized creation offsets to the forward
+          // branch targets, if any.
+          InstructionOffsetValue branchTargets = partialEvaluator.branchTargets(offset);
+
+          if (branchTargets != null) {
+            for (int branchIndex = 0;
+                 branchIndex < branchTargets.instructionOffsetCount();
+                 branchIndex++) {
+              int branchOffset = branchTargets.instructionOffset(branchIndex);
+              if (uninitializedOffsets[branchOffset] == null) {
+                uninitializedOffsets[branchOffset] = currentUninitializedOffsets;
+                System.out.println("branch:" + branchOffset);
+              }
+            }
+          }
+
+          List<Integer> exceptionHandlers = getExceptionHandler(offset);
+          if (exceptionHandlers != null) {
+            for (Integer exceptionHandle : exceptionHandlers) {
+              if (uninitializedOffsets[exceptionHandle] == null) {
+                uninitializedOffsets[exceptionHandle] = currentUninitializedOffsets;
+                System.out.println("exception:" + exceptionHandle);
+              }
+            }
+          }
+
+
         }
+      }
 
-        // Propagate the uninitialized creation offsets to the forward
-        // branch targets, if any.
-        InstructionOffsetValue branchTargets = partialEvaluator.branchTargets(offset);
 
-        if (branchTargets != null) {
-          for (int branchIndex = 0;
-              branchIndex < branchTargets.instructionOffsetCount();
-              branchIndex++) {
-            int branchOffset = branchTargets.instructionOffset(branchIndex);
-            if (branchOffset > offset) {
-              uninitializedOffsets[branchOffset] = currentUninitializedOffsets;
+      boolean continueThis = false;
+      for (int offset = 0; offset < codeLength; offset++) {
+        if (partialEvaluator.isTraced(offset)) {
+          if (uninitializedOffsets[offset] == null) {
+            System.out.println("InitFinder: offset is null：" + offset + " when try index:" + tryIndex);
+            continueThis = true;
+            break;
+          }
+        }
+      }
+
+      if (tryIndex == 9) {
+        System.out.print("all null offset:");
+        for (int offset = 0; offset < codeLength; offset++) {
+          if (partialEvaluator.isTraced(offset)) {
+            if (uninitializedOffsets[offset] == null) {
+              System.out.print(offset + ",");
             }
           }
         }
+        throw new RuntimeException("why do this");
+      }
+      if (!continueThis) {
+        break;
       }
     }
 
@@ -295,5 +358,22 @@ public class InitializationFinder implements AttributeVisitor, InstructionVisito
 
     // Get the trace value.
     return tracedReferenceValue.getTraceValue().instructionOffsetValue();
+  }
+
+
+  private HashMap<Integer, ArrayList<Integer>> exceptionBranchTarget = new HashMap<>();
+  @Override
+  public void visitExceptionInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, ExceptionInfo exceptionInfo) {
+    for (int endPC = exceptionInfo.u2endPC - 1; endPC >= exceptionInfo.u2startPC; endPC--) {
+      if (partialEvaluator.isTraced(endPC) && endPC != exceptionInfo.u2handlerPC ) {
+        exceptionBranchTarget.computeIfAbsent(endPC, k -> new ArrayList<>()).add(exceptionInfo.u2handlerPC);
+        break;
+      }
+    }
+  }
+
+
+  public List<Integer> getExceptionHandler(int offset) {
+    return exceptionBranchTarget.get(offset);
   }
 }
